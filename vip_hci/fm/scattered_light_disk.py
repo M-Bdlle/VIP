@@ -25,7 +25,7 @@ import scipy.special as  scsp
 import sys
 #from pathlib import Path
 #sys.path.append('/Users/bonduelm/Git/VIP/vip_hci/var')
-from ../var/coords import frame_center
+from ..var import frame_center
 
 class ScatteredLightDisk(object):
     """
