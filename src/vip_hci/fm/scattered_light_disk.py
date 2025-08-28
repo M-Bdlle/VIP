@@ -18,35 +18,37 @@ __all__ = ['ScatteredLightDisk',
 
 import numpy as np
 import matplotlib.pyplot as plt
+#from pathlib import Path
 from scipy.optimize import newton
-from scipy.interpolate import interp1d, PchipInterpolator
-from ..var import frame_center
-
+from scipy.interpolate import interp1d,PchipInterpolator
+import scipy.special as  scsp
+import sys
+#from pathlib import Path
+sys.path.append('/Users/bonduelm/Git/VIP/src/vip_hci/var') # line 1 for the local
+from coords import frame_center # line 2 for the local
+#from ..var import frame_center # line for the server
 
 class ScatteredLightDisk(object):
-    """Class used to generate a synthetic disc, inspired from a light version\
-    of the GRATER tool (GRenoble RAdiative TransfER) written originally in IDL\
-    [AUG99]_, and converted to Python by J. Milli."""
-
-    def __init__(self, nx=200, ny=200, distance=50., itilt=60., omega=0.,
-                 pxInArcsec=0.01225, pa=0., flux_max=None,
-                 density_dico={'name': '2PowerLaws', 'ain': 5, 'aout': -5,
-                               'a': 40, 'e': 0, 'ksi0': 1., 'gamma': 2.,
-                               'beta': 1., 'dens_at_r0': 1.},
-                 spf_dico={'name': 'HG', 'g': 0., 'polar': False}, xdo=0.,
-                 ydo=0., xs=None, ys=None):
+    """
+    Class used to generate a synthetic disc, inspired from a light version of
+    the GRATER tool (GRenoble RAdiative TransfER) written originally in IDL
+    [AUG99]_, and converted to Python by J. Milli.
+    """
+    def __init__(self, nx=200, ny=200, distance=50., itilt=60., omega=0., pxInArcsec=0.01225, pa=0., flux_max=None,
+                 density_dico={'name': '2PowerLaws', 'ain': 5, 'aout': -5, 'a': 40, 'e': 0, 'ksi0': 1., 'gamma': 2., 'beta': 1., 'dens_at_r0': 1.},
+                 spf_dico={'tot': True, 'polar': False, 'spf_method': 'HG', 'g': 0.}, 
+                 xdo=0.,ydo=0.,xs=None,ys=None):
         """
-        Construct the Scattered_light_disk object, taking in input the\
-        geometric parameters of the disk, the radial density distribution\
+        Constructor of the Scattered_light_disk object, taking in input the
+        geometric parameters of the disk, the radial density distribution
         and the scattering phase function.
-
         So far, only one radial distribution is implemented: a smoothed
         2-power-law distribution, but more complex radial profiles can be
         implemented on demand.
-        By default, the star is assumed to be centered at the frame center as
-        defined in the vip_hci.var.frame_center function (geometric center of
-        the image, e.g. either in the middle of the central pixel for odd-size
-        images or in between 4 pixel for even-size images).
+        By default, the star is assumed to be centered at the frame center as defined in
+        the vip_hci.var.frame_center function (geometric center of the image,
+        e.g. either in the middle of the central pixel for odd-size images or
+        in between 4 pixel for even-size images).
 
         Parameters
         ----------
@@ -65,7 +67,7 @@ class ScatteredLightDisk(object):
             pixel field of view in arcsec/px (default the SPHERE pixel
             scale 0.01225 arcsec/px)
         pa : float
-            position angle of the disc in degrees (default 0 deg, e.g. North)
+            position angle of the disc in degrees (default 0 degrees, e.g. North)
         flux_max : float
             the max flux of the disk in ADU. By default None, meaning that
             the disk flux is not normalized to any value.
@@ -97,9 +99,9 @@ class ScatteredLightDisk(object):
                     minimim semi-major axis: the dust density is 0 below this
                     value (default 0)
         spf_dico :  dictionnary
-            Parameters describing the scattering phase function to be
-            implemented. By default, an isotropic phase function is implemented.
-            It should at least contain the key "name".
+            Parameters describing the scattering phase function to be implemented.
+            By default, an isotropic phase function is implemented. It should
+            at least contain the key "name".
         xdo : float
             disk offset along the x-axis in the disk frame (=semi-major axis),
             in a.u. (default 0)
@@ -107,17 +109,17 @@ class ScatteredLightDisk(object):
             disk offset along the y-axis in the disk frame (=semi-minor axis),
             in a.u. (default 0)
         xs : float
-            star x position in pixel. By default, the star is assumed to be
-            centered at the frame center as defined in the
-            vip_hci.var.frame_center function (geometric center of the image,
-            e.g. either in the middle of the central pixel for odd-size images
-            or in between 4 pixel for even-size images).
+            star x position in pixel. By default, the star is assumed to be 
+            centered at the frame center as defined in
+            the vip_hci.var.frame_center function (geometric center of the image,
+            e.g. either in the middle of the central pixel for odd-size images or
+            in between 4 pixel for even-size images).
         ys : float
-            star y position in pixel. By default, the star is assumed to be
-            centered at the frame center as defined in the
-            vip_hci.var.frame_center function (geometric center of the image,
-            e.g. either in the middle of the central pixel for odd-size images
-            or in between 4 pixel for even-size images).
+            star y position in pixel. By default, the star is assumed to be 
+            centered at the frame center as defined in
+            the vip_hci.var.frame_center function (geometric center of the image,
+            e.g. either in the middle of the central pixel for odd-size images or
+            in between 4 pixel for even-size images).
         """
         self.nx = nx    # number of pixels along the x axis of the image
         self.ny = ny    # number of pixels along the y axis of the image
@@ -147,10 +149,16 @@ class ScatteredLightDisk(object):
         self.phase_function = Phase_function(spf_dico=spf_dico)
         self.scattered_light_map = np.ndarray((ny, nx))
         self.scattered_light_map.fill(0.)
+        
+        # self.scattered_light_map_tot = np.ndarray((self.ny, self.nx))
+        # self.scattered_light_map_tot.fill(0.)
+        # self.scattered_light_map_pol = np.ndarray((self.ny, self.nx))
+        # self.scattered_light_map_pol.fill(0.)
+        
 
     def set_inclination(self, itilt):
         """
-        Set the inclination of the disk.
+        Sets the inclination of the disk.
 
         Parameters
         ----------
@@ -164,7 +172,7 @@ class ScatteredLightDisk(object):
 
     def set_pa(self, pa):
         """
-        Set the disk position angle.
+        Sets the disk position angle
 
         Parameters
         ----------
@@ -181,7 +189,7 @@ class ScatteredLightDisk(object):
 
     def set_omega(self, omega):
         """
-        Set the argument of pericenter.
+        Sets the argument of pericenter
 
         Parameters
         ----------
@@ -192,7 +200,7 @@ class ScatteredLightDisk(object):
 
     def set_flux_max(self, flux_max):
         """
-        Set the mas flux of the disk.
+        Sets the mas flux of the disk
 
         Parameters
         ----------
@@ -203,7 +211,7 @@ class ScatteredLightDisk(object):
 
     def set_density_distribution(self, density_dico):
         """
-        Set or update the parameters of the density distribution.
+        Sets or updates the parameters of the density distribution
 
         Parameters
         ----------
@@ -236,7 +244,7 @@ class ScatteredLightDisk(object):
 
     def set_phase_function(self, spf_dico):
         """
-        Set the phase function of the dust.
+        Sets the phase function of the dust
 
         Parameters
         ----------
@@ -251,7 +259,9 @@ class ScatteredLightDisk(object):
         self.phase_function = Phase_function(spf_dico=spf_dico)
 
     def print_info(self):
-        """Print the information of the disk and image parameters."""
+        """
+        Prints the information of the disk and image parameters
+        """
         print('-----------------------------------')
         print('Geometrical properties of the image')
         print('-----------------------------------')
@@ -273,23 +283,23 @@ class ScatteredLightDisk(object):
         self.phase_function.print_info()
 
     def check_inclination(self):
-        """Check whether the inclination set is close to edge-on and risks to\
-        induce artefacts from the limited numerical accuracy. In such a case\
-        the inclination is changed to be less edge-on."""
+        """
+        Checks whether the inclination set is close to edge-on and risks to
+        induce artefacts from the limited numerical accuracy. In such a case
+        the inclination is changed to be less edge-on.
+        """
         if np.abs(np.mod(self.itilt, 180)-90) < np.abs(
-                np.mod(self.dust_density.dust_distribution_calc.itiltthreshold,
-                       180)-90):
+                np.mod(self.dust_density.dust_distribution_calc.itiltthreshold, 180)-90):
             print('Warning the disk is too close to edge-on')
             msg = 'The inclination was changed from {0:.2f} to {1:.2f}'
-            ittthr = self.dust_density.dust_distribution_calc.itiltthreshold
             print(msg.format(self.itilt,
-                             ittthr))
+                             self.dust_density.dust_distribution_calc.itiltthreshold))
             self.set_inclination(
                 self.dust_density.dust_distribution_calc.itiltthreshold)
 
     def compute_scattered_light(self, halfNbSlices=25):
         """
-        Compute the scattered light image of the disk.
+        Computes the scattered light image of the disk.
 
         Parameters
         ----------
@@ -300,31 +310,29 @@ class ScatteredLightDisk(object):
         # dist along the line of sight to reach the disk midplane (z_D=0), AU:
         lz0_map = self.y_map * np.tan(np.deg2rad(self.itilt))
         # dist to reach +zmax, AU:
-        lzp_map = self.dust_density.dust_distribution_calc.zmax/self.cosi + \
-            lz0_map
+        lzp_map = self.dust_density.dust_distribution_calc.zmax/self.cosi + lz0_map
         # dist to reach -zmax, AU:
-        lzm_map = -self.dust_density.dust_distribution_calc.zmax/self.cosi + \
-            lz0_map
+        lzm_map = -self.dust_density.dust_distribution_calc.zmax/self.cosi + lz0_map
         dl_map = np.absolute(lzp_map-lzm_map)  # l range, in AU
         # squared maximum l value to reach the outer disk radius, in AU^2:
-        lmax2 = self.dust_density.dust_distribution_calc.rmax**2 - \
-            (self.x_map**2+self.y_map**2)
+        lmax2 = self.dust_density.dust_distribution_calc.rmax**2 -  (self.x_map**2+self.y_map**2)
         # squared minimum l value to reach the inner disk radius, in AU^2:
         lmin2 = (self.x_map**2+self.y_map**2)-self.rmin**2
         validPixel_map = (lmax2 > 0.) * (lmin2 > 0.)
         lwidth = 100.  # control the distribution of distances along l
         nbSlices = 2*halfNbSlices-1  # total number of distances
         # along the line of sight
-        tmp = (np.exp(np.arange(halfNbSlices)*np.log(lwidth+1.) /
-                      (halfNbSlices-1.))-1.)/lwidth  # between 0 and 1
+        tmp = (np.exp(np.arange(halfNbSlices)*np.log(lwidth+1.) /(halfNbSlices-1.))-1.)/lwidth  # between 0 and 1
         ll = np.concatenate((-tmp[:0:-1], tmp))
         # 1d array pre-calculated values, AU
         ycs_vector = self.cosi*self.y_map[validPixel_map]
         # 1d array pre-calculated values, AU
         zsn_vector = -self.sini*self.y_map[validPixel_map]
         xd_vector = self.x_map[validPixel_map]  # x_disk, in AU
-        lima = np.ndarray((nbSlices, self.ny, self.nx))
-        lima.fill(0.)
+        limage = np.ndarray((nbSlices, self.ny, self.nx))
+        limage.fill(0.)
+        limage_tot = np.copy(limage)
+        limage_pol = np.copy(limage)
 
         for il in range(nbSlices):
             # distance along the line of sight to reach the plane z
@@ -340,8 +348,7 @@ class ScatteredLightDisk(object):
             rstar_vector = np.sqrt(xd_vector**2+yd_vector**2)
             thetastar_vector = np.arctan2(yd_vector, xd_vector)
             # Phase angles:
-            cosphi_vector = (rstar_vector*self.sini*np.sin(thetastar_vector) +
-                             zd_vector*self.cosi)/dstar_vector  # in radians
+            cosphi_vector = (rstar_vector*self.sini*np.sin(thetastar_vector) + zd_vector*self.cosi)/dstar_vector  # in radians
             # Polar coordinates in the disk frame, and semi-major axis:
             # midplane distance to the disk center (r coordinate), in AU
             r_vector = np.sqrt((xd_vector-self.xdo)**2+(yd_vector-self.ydo)**2)
@@ -350,30 +357,62 @@ class ScatteredLightDisk(object):
             costheta_vector = np.cos(theta_vector-np.deg2rad(self.omega))
             # Scattered light:
             # volume density
-            rho_vector = self.dust_density.density_cylindrical(r_vector,
-                                                               costheta_vector,
-                                                               zd_vector)
-            ph_f = self.phase_function.compute_phase_function_from_cosphi(
-                cosphi_vector)
+            phi_vector = np.rad2deg(np.arccos(cosphi_vector))
+            rho_vector = self.dust_density.density_cylindrical(r_vector, costheta_vector, zd_vector)
+            #phase_function = self.phase_function.compute_phase_function_from_cosphi(cosphi_vector)
+            phase_function = self.phase_function.compute_phase_function(phi_vector)
             image = np.ndarray((self.ny, self.nx))
             image.fill(0.)
-            image[validPixel_map] = rho_vector*ph_f/d2star_vector
-            lima[il, :, :] = image
-        self.scattered_light_map.fill(0.)
-        for il in range(1, nbSlices):
-            self.scattered_light_map += (ll[il]-ll[il-1]) * (lima[il-1, :, :] +
-                                                             lima[il, :, :])
-        self.scattered_light_map[validPixel_map] *= (dl_map[validPixel_map] / 2.
-                                                     * self.pxInAU**2)
-        if self.flux_max is not None:
-            self.scattered_light_map *= (self.flux_max /
-                                         np.nanmax(self.scattered_light_map))
-        return self.scattered_light_map
+            
+            if np.ndim(phase_function) == 2:
+                image_tot = np.copy(image)
+                phase_function_tot = phase_function[0,:]
+                image_tot[validPixel_map] = rho_vector*phase_function_tot/d2star_vector
+                limage_tot[il, :, :] = image_tot
+
+                image_pol = np.copy(image)
+                phase_function_pol = phase_function[1,:]                
+                image_pol[validPixel_map] = rho_vector*phase_function_pol/d2star_vector
+                limage_pol[il, :, :] = image_pol
+            
+            else:
+                image[validPixel_map] = rho_vector*phase_function/d2star_vector
+                limage[il, :, :] = image
+                
+            
+        if np.ndim(phase_function) == 2:
+            self.scattered_light_map_tot = np.ndarray((self.ny, self.nx))
+            self.scattered_light_map_pol = np.ndarray((self.ny, self.nx))
+            self.scattered_light_map_tot.fill(0.)
+            self.scattered_light_map_pol.fill(0.)
+            for il in range(1, nbSlices):
+                self.scattered_light_map_tot += (ll[il]-ll[il-1]) * (limage_tot[il-1, :, :] + limage_tot[il, :, :])
+                self.scattered_light_map_pol += (ll[il]-ll[il-1]) * (limage_pol[il-1, :, :] + limage_pol[il, :, :])
+            self.scattered_light_map_tot[validPixel_map] *= dl_map[validPixel_map] / 2. * self.pxInAU**2
+            self.scattered_light_map_pol[validPixel_map] *= dl_map[validPixel_map] / 2. * self.pxInAU**2
+            if self.flux_max is not None:
+                self.scattered_light_map_tot *= (self.flux_max / np.nanmax(self.scattered_light_map_tot))
+                self.scattered_light_map_pol *= (self.flux_max / np.nanmax(self.scattered_light_map_pol))
+
+            return np.array([self.scattered_light_map_tot, self.scattered_light_map_pol]) 
+              
+        
+        else:
+            self.scattered_light_map.fill(0.)
+            for il in range(1, nbSlices):
+                self.scattered_light_map += (ll[il]-ll[il-1]) * (limage[il-1, :, :] + limage[il, :, :])
+            self.scattered_light_map[validPixel_map] *= dl_map[validPixel_map] / 2. * self.pxInAU**2
+            if self.flux_max is not None:
+                self.scattered_light_map *= (self.flux_max / np.nanmax(self.scattered_light_map))
+            return self.scattered_light_map
+
+
+        
 
     def get_scattering_angle(self):
         """
-        Compute an image with the scattering angle of the dust\
-        located in the disk midplane at each point in the image.
+        Function that computes an image with the scattering angle of the dust 
+        located in the disk midplane at each point in the image 
 
         Returns
         -------
@@ -403,56 +442,60 @@ class ScatteredLightDisk(object):
         cosphi_vector = (rstar_vector*self.sini*np.sin(thetastar_vector) +
                          zd_vector*self.cosi)/dstar_vector  # in radians
         return np.rad2deg(np.arccos(cosphi_vector))
-
+        
+    
+    
+    
+    
 
 class Dust_distribution(object):
-    """Class representing the dust distribution."""
+    """This class represents the dust distribution
+    """
 
     def __init__(self, density_dico={'name': '2PowerLaws', 'ain': 5, 'aout': -5,
                                      'a': 60, 'e': 0, 'ksi0': 1., 'gamma': 2.,
                                      'beta': 1., 'amin': 0., 'dens_at_r0': 1.}):
         """
-        Construct the Dust_distribution class.
+        Constructor for the Dust_distribution class.
 
-        We assume the dust density is 0 radially after it drops below 0.5%
-        (the accuracy variable) of the peak density in
-        the midplane, and vertically whenever it drops below 0.5% of the
-        peak density in the midplane
+        We assume the dust density is 0 radially after it drops below 0.5% (the accuracy variable) of the peak density in
+        the midplane, and vertically whenever it drops below 0.5% of the peak density in the midplane
         """
         self.accuracy = 5.e-3
         if not isinstance(density_dico, dict):
-            errmsg = 'The parameters describing the dust density distribution' \
-                     ' must be a Python dictionnary'
+            errmsg = 'The parameters describing the dust density distribution must be a Python dictionnary'
             raise TypeError(errmsg)
         if 'name' not in density_dico.keys():
-            errmsg = 'The dictionnary describing the dust density ' \
-                     'distribution must contain the key "name"'
+            errmsg = 'The dictionnary describing the dust density distribution must contain the key "name"'
             raise TypeError(errmsg)
         self.type = density_dico['name']
         if self.type == '2PowerLaws':
-            self.dust_distribution_calc = DustEllipticalDistribution2PowerLaws(
-                                                    self.accuracy, density_dico)
+            self.dust_distribution_calc = DustEllipticalDistribution2PowerLaws(self.accuracy, density_dico)
         else:
-            errmsg = 'The only dust distribution implemented so far is the' \
-                     ' "2PowerLaws"'
+            errmsg = 'The only dust distribution implemented so far is the "2PowerLaws"'
             raise TypeError(errmsg)
 
     def set_density_distribution(self, density_dico):
-        """Update the parameters of the density distribution."""
+        """
+        Update the parameters of the density distribution.
+        """
         self.dust_distribution_calc.set_density_distribution(density_dico)
 
     def density_cylindrical(self, r, costheta, z):
-        """Return the particule volume density at r, theta, z."""
+        """
+        Return the particule volume density at r, theta, z.
+        """
         return self.dust_distribution_calc.density_cylindrical(r, costheta, z)
 
     def density_cartesian(self, x, y, z):
-        """Return the particule volume density at x,y,z, taking into account\
-        the offset of the disk."""
+        """
+        Return the particule volume density at x,y,z, taking into account the offset of the disk.
+        """
         return self.dust_distribution_calc.density_cartesian(x, y, z)
 
     def print_info(self, pxInAu=None):
         """
-        Display the parameters of the radial distribution of the dust.
+        Utility function that displays the parameters of the radial distribution of the dust
 
         Input:
             - pxInAu (optional): the pixel size in au
@@ -464,25 +507,23 @@ class Dust_distribution(object):
 
 
 class DustEllipticalDistribution2PowerLaws:
-    """Class representing the elliptical dust distribution with 2 Power laws."""
+    """
+    """
 
-    def __init__(self, accuracy=5.e-3,
-                 density_dico={'ain': 5, 'aout': -5, 'a': 60, 'e': 0,
-                               'ksi0': 1., 'gamma': 2., 'beta': 1., 'amin': 0.,
-                               'dens_at_r0': 1.}):
+    def __init__(self, accuracy=5.e-3, density_dico={'ain': 5, 'aout': -5, 'a': 60, 'e': 0, 'ksi0': 1.,
+                                                     'gamma': 2., 'beta': 1., 'amin': 0., 'dens_at_r0': 1.}):
         """
-        Construct the Dust_distribution class.
+        Constructor for the Dust_distribution class.
 
-        We assume the dust density is 0 radially after it drops below 0.5%
-        (the accuracy variable) of the peak density in
-        the midplane, and vertically whenever it drops below 0.5% of the
-        peak density in the midplane
+        We assume the dust density is 0 radially after it drops below 0.5% (the accuracy variable) of the peak density in
+        the midplane, and vertically whenever it drops below 0.5% of the peak density in the midplane
         """
         self.accuracy = accuracy
         self.set_density_distribution(density_dico)
 
     def set_density_distribution(self, density_dico):
-        """Set the density distribution."""
+        """
+        """
         if 'ksi0' not in density_dico.keys():
             ksi0 = 1.
         else:
@@ -519,18 +560,13 @@ class DustEllipticalDistribution2PowerLaws:
             dens_at_r0 = 1.
         else:
             dens_at_r0 = density_dico['dens_at_r0']
+            
         self.set_vertical_density(ksi0=ksi0, gamma=gamma, beta=beta)
-        self.set_radial_density(
-            ain=ain,
-            aout=aout,
-            a=a,
-            e=e,
-            amin=amin,
-            dens_at_r0=dens_at_r0)
+        self.set_radial_density(ain=ain, aout=aout, a=a, e=e, amin=amin, dens_at_r0=dens_at_r0)
 
     def set_vertical_density(self, ksi0=1., gamma=2., beta=1.):
         """
-        Set the parameters of the vertical density function.
+        Sets the parameters of the vertical density function
 
         Parameters
         ----------
@@ -551,8 +587,7 @@ class DustEllipticalDistribution2PowerLaws:
             ksi0 = 0.1
         if beta < 0.:
             print('Warning the flaring coefficient beta is negative')
-            print(
-                'beta was changed from {0:6.2f} to 0 (flat disk)'.format(beta))
+            print('beta was changed from {0:6.2f} to 0 (flat disk)'.format(beta))
             beta = 0.
         self.ksi0 = float(ksi0)
         self.gamma = float(gamma)
@@ -562,23 +597,20 @@ class DustEllipticalDistribution2PowerLaws:
     def set_radial_density(self, ain=5., aout=-5., a=60.,
                            e=0., amin=0., dens_at_r0=1.):
         """
-        Set the parameters of the radial density function.
+        Sets the parameters of the radial density function
 
         Parameters
         ----------
         ain : float
-            slope of the power-low distribution in the inner disk. It
-            must be positive (default 5)
+            slope of the power-low distribution in the inner disk. It must be positive (default 5)
         aout : float
-            slope of the power-low distribution in the outer disk. It
-            must be negative (default -5)
+            slope of the power-low distribution in the outer disk. It must be negative (default -5)
         a : float
             reference radius in au (default 60)
         e : float
             eccentricity (default 0)
         amin: float
-            minimim semi-major axis: the dust density is 0 below this
-            value (default 0)
+            minimim semi-major axis: the dust density is 0 below this value (default 0)
         """
         if ain < 0.1:
             print('Warning the inner slope is greater than 0.1')
@@ -603,8 +635,7 @@ class DustEllipticalDistribution2PowerLaws:
             print('amin was changed from {0:6.2f} to 0.'.format(amin))
             amin = 0.
         if dens_at_r0 < 0:
-            raise ValueError(
-                'Warning the reference dust density at r0 is negative')
+            raise ValueError('Warning the reference dust density at r0 is negative')
             print('It was changed from {0:6.2f} to 1.'.format(dens_at_r0))
             dens_at_r0 = 1.
         self.ain = float(ain)
@@ -624,10 +655,8 @@ class DustEllipticalDistribution2PowerLaws:
                                                1./(2.*(self.ain-self.aout)))
                 Gamma_in = self.ain+self.beta
                 Gamma_out = self.aout+self.beta
-                ratio = Gamma_in/Gamma_out
-                diff = Gamma_in-Gamma_out
-                self.apeak_surface_density = self.a * np.power(-ratio,
-                                                               1./(2.*diff))
+                self.apeak_surface_density = self.a * np.power(-Gamma_in/Gamma_out,
+                                                               1./(2.*(Gamma_in-Gamma_out)))
                 # the above formula comes from Augereau et al. 1999.
             else:
                 self.apeak = self.a
@@ -648,7 +677,8 @@ class DustEllipticalDistribution2PowerLaws:
 
     def print_info(self, pxInAu=None):
         """
-        Display the parameters of the radial distribution of the dust.
+        Utility function that displays the parameters of the radial distribution
+        of the dust
 
         Input:
             - pxInAu (optional): the pixel size in au
@@ -676,18 +706,18 @@ class DustEllipticalDistribution2PowerLaws:
         if pxInAu is not None:
             msg = 'Reference semi-major axis: {0:.1f}au or {1:.1f}px'
             print(msg.format(self.a, self.a/pxInAu))
-            msg2 = 'Semi-major axis at maximum dust density in plane z=0:' \
-                   ' {0:.1f}au or {1:.1f}px (same as ref sma if ain=-aout)'
+            msg2 = 'Semi-major axis at maximum dust density in plane z=0: {0:.1f}au or ' \
+                   '{1:.1f}px (same as ref sma if ain=-aout)'
             print(msg2.format(self.apeak, self.apeak/pxInAu))
-            msg3 = 'Semi-major axis at half max dust density in plane z=0:' \
-                   '{0:.1f}au or {1:.1f}px for the inner edge ' \
-                   '/ {2:.1f}au or {3:.1f}px for the outer edge, with a FWHM' \
-                   '{4:.1f}au or {5:.1f}px'
+            msg3 = 'Semi-major axis at half max dust density in plane z=0: {0:.1f}au or ' \
+                '{1:.1f}px for the inner edge ' \
+                '/ {2:.1f}au or {3:.1f}px for the outer edge, with a FWHM of ' \
+                '{4:.1f}au or {5:.1f}px'
             print(msg3.format(a_minus_hwhm, a_minus_hwhm/pxInAu, a_plus_hwhm,
                               a_plus_hwhm/pxInAu, a_plus_hwhm-a_minus_hwhm,
                               (a_plus_hwhm-a_minus_hwhm)/pxInAu))
-            msg4 = 'Semi-major axis at maximum dust surface density: {0:.1f}au'\
-                   ' or {1:.1f}px (same as ref sma if ain=-aout)'
+            msg4 = 'Semi-major axis at maximum dust surface density: {0:.1f}au or ' \
+                   '{1:.1f}px (same as ref sma if ain=-aout)'
             print(
                 msg4.format(
                     self.apeak_surface_density,
@@ -697,8 +727,8 @@ class DustEllipticalDistribution2PowerLaws:
             print(msg5.format(self.p, self.p/pxInAu))
         else:
             print('Reference semi-major axis: {0:.1f}au'.format(self.a))
-            msg = 'Semi-major axis at maximum dust density in plane z=0: ' \
-                  '{0:.1f}au (same as ref sma if ain=-aout)'
+            msg = 'Semi-major axis at maximum dust density in plane z=0: {0:.1f}au (same ' \
+                  'as ref sma if ain=-aout)'
             print(msg.format(self.apeak))
             msg3 = 'Semi-major axis at half max dust density: {0:.1f}au ' \
                 '/ {1:.1f}au for the inner/outer edge, or a FWHM of ' \
@@ -709,8 +739,8 @@ class DustEllipticalDistribution2PowerLaws:
                     a_plus_hwhm,
                     a_plus_hwhm -
                     a_minus_hwhm))
-            msg4 = 'Semi-major axis at maximum dust surface density: '\
-                   '{0:.1f}au (same as ref sma if ain=-aout)'
+            msg4 = 'Semi-major axis at maximum dust surface density: {0:.1f}au ' \
+                   '(same as ref sma if ain=-aout)'
             print(
                 msg4.format(
                     self.apeak_surface_density))
@@ -718,8 +748,8 @@ class DustEllipticalDistribution2PowerLaws:
         print('Ellipticity: {0:.3f}'.format(self.e))
         print('Inner slope: {0:.2f}'.format(self.ain))
         print('Outer slope: {0:.2f}'.format(self.aout))
-        msg = 'Density at the reference semi-major axis: {0:4.3e}'
-        print(msg.format(self.dens_at_r0) + '(arbitrary unit)')
+        print(
+            'Density at the reference semi-major axis: {0:4.3e} (arbitrary unit'.format(self.dens_at_r0))
         if self.amin > 0:
             print('Minimum radius (sma): {0:.2f}au'.format(self.amin))
         if pxInAu is not None:
@@ -737,6 +767,7 @@ class DustEllipticalDistribution2PowerLaws:
         print('Properties for numerical integration')
         print('------------------------------------')
         print('Requested accuracy {0:.2e}'.format(self.accuracy))
+#        print('Minimum radius for integration: {0:.2f} au'.format(self.rmin))
         print('Maximum radius for integration: {0:.2f} au'.format(self.rmax))
         print('Maximum height for integration: {0:.2f} au'.format(self.zmax))
         msg = 'Inclination threshold: {0:.2f} degrees'
@@ -744,7 +775,8 @@ class DustEllipticalDistribution2PowerLaws:
         return
 
     def density_cylindrical(self, r, costheta, z):
-        """Return the particule volume density at r, theta, z."""
+        """ Returns the particule volume density at r, theta, z
+        """
         radial_ratio = r/(self.p/(1-self.e*costheta))
         den = (np.power(radial_ratio, -2*self.ain) +
                np.power(radial_ratio, -2*self.aout))
@@ -756,8 +788,9 @@ class DustEllipticalDistribution2PowerLaws:
         return radial_density_term*vertical_density_term
 
     def density_cartesian(self, x, y, z):
-        """Return the particule volume density at x,y,z, taking into account\
-        the offset of the disk."""
+        """ Returns the particule volume density at x,y,z, taking into account
+        the offset of the disk
+        """
         r = np.sqrt(x**2+y**2)
         if r == 0:
             costheta = 0
@@ -766,295 +799,605 @@ class DustEllipticalDistribution2PowerLaws:
         return self.density_cylindrical(r, costheta, z)
 
 
+
+
+
+#         if 'polar' not in spf_dico.keys():
+#             self.polar = False
+        
+#         else:
+#             if not isinstance(spf_dico['polar'], bool):
+#                 msg = "The dictionnary describing the polarisation must be a 'boolean'"
+#                 raise TypeError(msg)
+#             self.polar = spf_dico['polar']
+            
+#             if 'beta_dolp' in spf_dico.keys():
+#                 self.polar_beta_dolp = True
+# ###########   #######    ## attention, ncéssaire de définir des conditions sur les coeffs de beta dolp probablement 
+                
+#             if 'Rayleigh' in spf_dico.keys():
+#                 self.polar_Rayleigh = True
+            
+            
+#             if 'polar_polynom_coeff' in spf_dico.keys():
+#                 self.polar_polynom = True
+#                 if isinstance(spf_dico['polar_polynom_coeff'],
+#                               (tuple, list, np.ndarray)):
+#                     self.polar_polynom_coeff = spf_dico['polar_polynom_coeff']
+#                 else:
+#                     msg = 'The dictionnary describing the polarisation polynomial function must be an array'
+#                     raise TypeError(msg)
+#             else:
+#                 #self.polar_polynom = False
+#                 msg = 'Type of polarised phase function not understood: {0:s}'
+#                 raise TypeError(msg.format(self.type))
+#         if   self.type == 'HG':
+#              self.phase_function_calc = HenyeyGreenstein_SPF(spf_dico)
+#         elif self.type == 'DoubleHG':
+#              self.phase_function_calc = DoubleHenyeyGreenstein_SPF(spf_dico)
+#         elif self.type == 'interpolated':
+#              *self.phase_function_calc = Interpolated_SPF(spf_dico)
+#         else:
+#             msg = 'Type of phase function not understood: {0:s}'
+#             raise TypeError(msg.format(self.type))
+
+
+
+
+
 class Phase_function(object):
-    """
-    Class representing the scattering phase function (spf).
-
-    It contains the attribute phase_function_calc that implements either a
-    single Henyey Greenstein phase function, a double Heyney Greenstein,
-    or any custom function (data interpolated from
-    an input list of phi, spf(phi)).
+    """ 
+    This class represents the scattering phase function (spf), in both total intensity or polarised intensity. 
+    In total intensity, it contains the attribute phase_function_calc that implements either a single Henyey Greenstein phase function, a double Heyney Greenstein, 
+    or any custom function (data interpolated from an input list of phi, spf(phi)).
+    In polarised intensity, it contains !!!!!!!!!!!
     """
 
-    def __init__(self, spf_dico={'name': 'HG', 'g': 0., 'polar': False}):
+    def __init__(self, spf_dico={'tot': True, 'polar': False, 'spf_method': 'HG', 'g': 0.}):
         """
-        Construct the Phase_function class.
-
-        It checks whether the spf_dico contains a correct name and sets the
-        attribute phase_function_calc.
+        Constructor of the Phase_function class. It checks whether the spf_dico contains a correct name and sets the attribute phase_function_calc
 
         Parameters
         ----------
         spf_dico :  dictionnary
-            Parameters describing the scattering phase function to be
-            implemented. By default, an isotropic phase function is implemented.
-            It should at least contain the key "name" chosen between 'HG'
-            (single Henyey Greenstein), 'DoubleHG' (double Heyney Greenstein) or
+            Parameters describing the scattering phase function to be implemented. By default, an isotropic phase function is implemented.
+            It should at least contain the key "name" chosen between 'HG' single Henyey Greenstein), 'DoubleHG' (double Heyney Greenstein) or
             'interpolated' (custom function).
-            The parameter "polar" enables to switch on the polarisation (if set
-            to True, the default is False). In this case it assumes either
-                - a Rayleigh polarised fraction
-                  (1-(cos phi)^2) / (1+(cos phi)^2).
-                  if nothing else is specified
-                - a polynomial if the keyword 'polar_polynom_coeff' is defined
-                  and corresponds to an array of polynomial coefficient, e.g.
-                  [p3,p2,p1,p0] evaluated as:
-                  np.polyval([p3,p2,p1,p0],np.arange(0, 180, 1))
+            The parameter "polar" enables to switch on the polarisation (if set to True, the default is False). In this case it assumes either:
+                - a polar calculated using the dolp, parametrised with a beta function if the keyword "beta_dolp' is defined 
+                - a Rayleigh polarised fraction (1-(cos phi)^2) / (1+(cos phi)^2) if the keyword "Rayleigh" is defined
+                [- a polynomial if the keyword 'polar_polynom_coeff' is defined and corresponds to an array of polynomial coefficient, e.g.
+                  [p3,p2,p1,p0] evaluated as np.polyval([p3,p2,p1,p0],np.arange(0, 180, 1))]
         """
+        
+                
         if not isinstance(spf_dico, dict):
-            msg = 'The parameters describing the phase function must be a ' \
-                  'Python dictionnary'
+            msg = 'The parameters describing the phase function must be a Python dictionnary'
             raise TypeError(msg)
-        if 'name' not in spf_dico.keys():
-            msg = 'The dictionnary describing the phase function must contain' \
-                  ' the key "name"'
+
+        if not spf_dico['tot'] and not spf_dico['polar']:
+            msg = "tot and polar cannot be both False"
             raise TypeError(msg)
-        self.type = spf_dico['name']
-        if 'polar' not in spf_dico.keys():
-            self.polar = False
-        else:
-            if not isinstance(spf_dico['polar'], bool):
-                msg = 'The dictionnary describing the polarisation must be a ' \
-                      'boolean'
-                raise TypeError(msg)
-            self.polar = spf_dico['polar']
-            if 'polar_polynom_coeff' in spf_dico.keys():
-                self.polar_polynom = True
-                if isinstance(spf_dico['polar_polynom_coeff'],
-                              (tuple, list, np.ndarray)):
-                    self.polar_polynom_coeff = spf_dico['polar_polynom_coeff']
-                else:
-                    msg = 'The dictionnary describing the polarisation ' \
-                          'polynomial function must be an array.'
-                    raise TypeError(msg)
-            else:
-                self.polar_polynom = False
-        if self.type == 'HG':
-            self.phase_function_calc = HenyeyGreenstein_SPF(spf_dico)
-        elif self.type == 'DoubleHG':
-            self.phase_function_calc = DoubleHenyeyGreenstein_SPF(spf_dico)
-        elif self.type == 'interpolated':
-            self.phase_function_calc = Interpolated_SPF(spf_dico)
+
+        #if 'spf_method' or 'pspf_method'  not in spf_dico.keys():
+        if 'spf_method'  not in spf_dico.keys():
+            #msg = 'The dictionnary describing the (polarised) phase function must contain the key "spf_method" and "pspf_method". "pspf_method can be None if "polar = False"'
+            msg = 'The dictionnary describing the phase function must contain the key "spf_method".'
+            raise TypeError(msg)
+        
+        self.tot = spf_dico['tot'] 
+        self.pol = spf_dico['polar'] 
+        
+        self.spf_method  = spf_dico['spf_method']
+        if   self.spf_method == 'HG':
+             self.phase_function_calc = HenyeyGreenstein_SPF(spf_dico)
+        elif self.spf_method == 'DoubleHG':
+             self.phase_function_calc = DoubleHenyeyGreenstein_SPF(spf_dico)
+        elif self.spf_method == 'interpolated':
+             self.phase_function_calc = Interpolated_SPF(spf_dico)
         else:
             msg = 'Type of phase function not understood: {0:s}'
-            raise TypeError(msg.format(self.type))
+            raise TypeError(msg.format(self.spf_method))
 
-    def compute_phase_function_from_cosphi(self, cos_phi):
+        
+        if self.pol:
+            if 'pspf_method' not in spf_dico.keys():
+                msg = 'If polar = True, pspf_method needs to be defined, among: Rayleigh, Polynomial, DOLP'
+                raise TypeError(msg)
+            self.pspf_method = spf_dico['pspf_method']
+            if self.pspf_method == 'Rayleigh':
+                self.polar_Rayleigh = True
+                self.polar_polynom = False
+                self.polar_dolp = False
+            elif self.pspf_method == 'Polynomial':
+                self.polar_Rayleigh = False
+                self.polar_polynom = True
+                self.polar_dolp = False
+            elif self.pspf_method == 'DOLP':
+                self.dolp_calc = BetaFunc_DOLP(spf_dico)
+                self.polar_Rayleigh = False
+                self.polar_polynom = False
+                self.polar_dolp = True
+            else:
+                msg = 'Type of polarised phase function not understood: {0:s}'
+                raise TypeError(msg.format(self.pspf_method))
+     
+
+    def compute_phase_function(self, phi):
         """
-        Compute the phase function at (a) specific scattering angle(s) phi.
-
-        The argument is not phi but cos(phi) for optimization
-        reasons.
-
+        Compute the phase function at (a) specific scattering scattering angle(s) phi. 
+        
         Parameters
         ----------
-        cos_phi : float or array
-            cosine of the scattering angle(s) at which the scattering function
-            must be calculated.
+        phi : float or array -- the scattering angle(s) at which the scattering function must be calculated.
         """
-        phf = self.phase_function_calc.compute_phase_function_from_cosphi(
-            cos_phi)
-        if self.polar:
+        
+        phf = self.phase_function_calc.compute_phase_function(phi)
+        
+        if self.pol:
+            if self.polar_Rayleigh:
+                pphf = (1-np.cos(np.deg2rad(phi))**2)/(1+np.cos(np.deg2rad(phi))**2) * phf         
             if self.polar_polynom:
-                phi = np.rad2deg(np.arccos(cos_phi))
-                return np.polyval(self.polar_polynom_coeff, phi) * phf
-            else:
-                return (1-cos_phi**2)/(1+cos_phi**2) * phf
+                pphf = np.polyval(self.polar_polynom_coeff, phi) * phf
+            if self.polar_dolp:
+                dolp = self.dolp_calc.compute_beta_dolp(phi)
+                #print(f"dolp ={dolp}")
+                pphf = dolp*phf
+                    
+        if self.pol and not self.tot:
+            return pphf
+        elif self.pol and self.tot:
+            return np.array([phf, pphf])
         else:
-            return phf
+             return phf
+            
+                        
 
     def print_info(self):
-        """Print information on the type and parameters of the scattering phase\
-        function."""
+        """
+        Prints information on the type and parameters of the scattering phase function.
+        """
         print('----------------------------')
         print('Phase function parameters')
         print('----------------------------')
-        print('Type of phase function: {0:s}'.format(self.type))
-        print('Linear polarisation: {0!r}'.format(self.polar))
+        print('Type of phase function: {0:s}'.format(self.spf_method))
+        print('Total intensity: {0!r}'.format(self.tot))
+        print('Linear polarisation: {0!r}'.format(self.pol))
         self.phase_function_calc.print_info()
+        if self.pol and self.polar_dolp:
+            self.dolp_calc.print_info()
 
-    def plot_phase_function(self):
-        """Plot the scattering phase function."""
+
+
+    def plot_phase_function(self, path):
+        """
+        Plots the scattering phase function
+        """
         phi = np.arange(0, 180, 1)
-        phase_func = self.compute_phase_function_from_cosphi(
-            np.cos(np.deg2rad(phi)))
-        if self.polar:
-            if self.polar_polynom:
-                phase_func = np.polyval(
-                    self.polar_polynom_coeff, phi) * phase_func
+        phase_func = self.compute_phase_function(phi)
+        
+        # if self.polar_dolp:
+        #      dolp1 = self.dolp_calc.compute_beta_dolp(phi)
+        
+        if np.ndim(phase_func) == 2:
+            phase_function_tot = phase_func[0,:]
+            phase_function_pol = phase_func[1,:]
+            dolp = phase_function_pol/phase_function_tot
+            
+            fig, (ax1,ax2,ax3) = plt.subplots(1,3)
+            ax1.set_box_aspect(1)
+            ax1.plot(phi, phase_function_tot/phase_function_tot[90])
+            ax1.set_xlabel('Scattering phase angle in degrees')
+            ax1.set_ylabel('Scattering phase function')
+            
+            ax2.plot(phi, phase_function_pol/phase_function_pol[90])
+            ax2.set_box_aspect(1)
+            ax2.set_xlabel('Scattering phase angle in degrees')
+            ax2.set_ylabel('Polarised scattering phase function')
+            
+            ax3.plot(phi, dolp*100)
+            ax3.set_box_aspect(1)
+            ax3.set_xlabel('Scattering phase angle in degrees')
+            ax3.set_ylabel('DOLP')
+        else:
+            if self.tot:
+                fig, (ax1) = plt.subplots(1,1)
+                ax1.plot(phi, phase_func)
+                ax1.set_xlabel('Scattering phase angle in degrees')
+                ax1.set_ylabel('Scattering phase function')
             else:
-                phase_func = (1-np.cos(np.deg2rad(phi))**2) / \
-                             (1+np.cos(np.deg2rad(phi))**2) * phase_func
+                fig, (ax1) = plt.subplots(1,1)
+                ax1.plot(phi, phase_func)
+                ax1.set_xlabel('Scattering phase angle in degrees')
+                ax1.set_ylabel('Polarised scattering phase function')
+        if path is not None:
+            plt.savefig(path.joinpath("p_SPF.pdf"), overwrite = True)
 
-        plt.close(0)
-        plt.figure(0)
-        plt.plot(phi, phase_func)
-        plt.xlabel('Scattering phase angle in degrees')
-        plt.ylabel('Scattering phase function')
-        plt.grid()
-        plt.xlim(0, 180)
-        plt.show()
+
+
+
+# class Phase_function(object):
+#     """ 
+#     This class represents the scattering phase function (spf). It contains the attribute phase_function_calc that implements either a 
+#     single Henyey Greenstein phase function, a double Heyney Greenstein, or any custom function (data interpolated from an input list of phi, spf(phi)).
+#     """
+
+#     def __init__(self, spf_dico={'name': 'HG', 'g': 0., 'tot': False, 'polar': False}):
+#         """
+#         Constructor of the Phase_function class. It checks whether the spf_dico
+#         contains a correct name and sets the attribute phase_function_calc
+
+#         Parameters
+#         ----------
+#         spf_dico :  dictionnary
+#             Parameters describing the scattering phase function to be implemented. By default, an isotropic phase function is implemented.
+#             It should at least contain the key "name" chosen between 'HG' single Henyey Greenstein), 'DoubleHG' (double Heyney Greenstein) or
+#             'interpolated' (custom function).
+#             The parameter "polar" enables to switch on the polarisation (if set to True, the default is False). In this case it assumes either:
+#                 - a polar calculated using the dolp, parametrised with a beta function if the keyword "beta_dolp' is defined 
+#                 - a Rayleigh polarised fraction (1-(cos phi)^2) / (1+(cos phi)^2) if the keyword "Rayleigh" is defined
+#                 [- a polynomial if the keyword 'polar_polynom_coeff' is defined and corresponds to an array of polynomial coefficient, e.g.
+#                   [p3,p2,p1,p0] evaluated as np.polyval([p3,p2,p1,p0],np.arange(0, 180, 1))]
+#         """
+#         if not isinstance(spf_dico, dict):
+#             msg = 'The parameters describing the phase function must be a ' \
+#                   'Python dictionnary'
+#             raise TypeError(msg)
+#         if 'name' not in spf_dico.keys():
+#             msg = 'The dictionnary describing the phase function must contain' \
+#                   ' the key "name"'
+#             raise TypeError(msg)
+#         self.type = spf_dico['name']
+#         if 'polar' not in spf_dico.keys():
+#             self.polar = False
+#         else:
+#             if not isinstance(spf_dico['polar'], bool):
+#                 msg = "The dictionnary describing the polarisation must be a 'boolean'"
+#                 raise TypeError(msg)
+#             self.polar = spf_dico['polar']
+            
+#             if 'beta_dolp' in spf_dico.keys():
+#                 self.polar_beta_dolp = True
+# ###########   #######    ## attention, ncéssaire de définir des conditions sur les coeffs de beta dolp probablement 
+                
+#             if 'Rayleigh' in spf_dico.keys():
+#                 self.polar_Rayleigh = True
+            
+            
+#             if 'polar_polynom_coeff' in spf_dico.keys():
+#                 self.polar_polynom = True
+#                 if isinstance(spf_dico['polar_polynom_coeff'],
+#                               (tuple, list, np.ndarray)):
+#                     self.polar_polynom_coeff = spf_dico['polar_polynom_coeff']
+#                 else:
+#                     msg = 'The dictionnary describing the polarisation polynomial function must be an array'
+#                     raise TypeError(msg)
+#             else:
+#                 #self.polar_polynom = False
+#                 msg = 'Type of polarised phase function not understood: {0:s}'
+#                 raise TypeError(msg.format(self.type))
+                
+#         if self.type == 'HG':
+#             self.phase_function_calc = HenyeyGreenstein_SPF(spf_dico)
+#         elif self.type == 'DoubleHG':
+#             self.phase_function_calc = DoubleHenyeyGreenstein_SPF(spf_dico)
+#         elif self.type == 'interpolated':
+#             self.phase_function_calc = Interpolated_SPF(spf_dico)
+#         else:
+#             msg = 'Type of phase function not understood: {0:s}'
+#             raise TypeError(msg.format(self.type))
+
+#     def compute_phase_function_from_cosphi(self, cos_phi):
+#         """
+#         Compute the phase function at (a) specific scattering scattering
+#         angle(s) phi. The argument is not phi but cos(phi) for optimization
+#         reasons.
+
+#         Parameters
+#         ----------
+#         cos_phi : float or array
+#             cosine of the scattering angle(s) at which the scattering function
+#             must be calculated.
+#         """
+#         phf = self.phase_function_calc.compute_phase_function_from_cosphi(
+#             cos_phi)
+        
+#         if self.polar:
+            
+#             if self.polar_beta_dolp:
+#                 return 
+# ##################         
+#             elif self.polar_Rayleigh:                
+#                 return (1-cos_phi**2)/(1+cos_phi**2) * phf
+            
+#             elif self.polar_polynom:
+#                 phi = np.rad2deg(np.arccos(cos_phi))
+#                 return np.polyval(self.polar_polynom_coeff, phi) * phf
+            
+#             else:
+#                 msg = 'Type of polarised phase function not understood: {0:s}'
+#                 raise TypeError(msg.format(self.type))
+        
+#         else:
+#             return phf
+
+#     def print_info(self):
+#         """
+#         Prints information on the type and parameters of the scattering phase
+#         function.
+#         """
+#         print('----------------------------')
+#         print('Phase function parameters')
+#         print('----------------------------')
+#         print('Type of phase function: {0:s}'.format(self.type))
+#         print('Linear polarisation: {0!r}'.format(self.polar))
+#         self.phase_function_calc.print_info()
+
+#     def plot_phase_function(self):
+#         """
+#         Plots the scattering phase function
+#         """
+#         phi = np.arange(0, 180, 1)
+#         phase_func = self.compute_phase_function_from_cosphi(
+#             np.cos(np.deg2rad(phi)))
+        
+#         if self.polar:
+            
+#             if self.polar_beta_dolp:
+#                 return
+# ############### 
+#             elif self.polar_Rayleigh:
+#                 phase_func = (1-np.cos(np.deg2rad(phi))**2) / \
+#                              (1+np.cos(np.deg2rad(phi))**2) * phase_func
+#             elif self.polar_polynom:
+#                 phase_func = np.polyval(
+#                     self.polar_polynom_coeff, phi) * phase_func
+
+#         plt.close(0)
+#         plt.figure(0)
+#         plt.plot(phi, phase_func)
+#         plt.xlabel('Scattering phase angle in degrees')
+#         plt.ylabel('Scattering phase function')
+#         plt.grid()
+#         plt.xlim(0, 180)
+#         plt.show()
 
 
 class HenyeyGreenstein_SPF(object):
-    """Implementation of a scattering phase function with a single Henyey\
-    Greenstein function."""
+    """
+    Implementation of a scattering phase function with a single Henyey Greenstein function.
+    """
 
     def __init__(self, spf_dico={'g': 0.}):
         """
-        Construct a Heyney Greenstein phase function.
+        Constructor of a Heyney Greenstein phase function.
 
         Parameters
         ----------
         spf_dico :  dictionnary containing the key "g" (float)
-            g is the Heyney Greenstein coefficient and should be between -1
-            (backward scattering) and 1 (forward scattering).
+            g is the Heyney Greenstein coefficient and should be between -1 (backward scattering) and 1 (forward scattering).
         """
         # it must contain the key "g"
         if 'g' not in spf_dico.keys():
-            raise TypeError('The dictionnary describing a Heyney Greenstein '
-                            'phase function must contain the key "g"')
+            raise TypeError('The dictionnary describing a Heyney Greenstein phase function must contain the key "g"')
         # the value of "g" must be a float or a list of floats
         elif not isinstance(spf_dico['g'], (float, int)):
-            raise TypeError('The key "g" of a Heyney Greenstein phase function'
-                            ' dictionnary must be a float or an integer')
+            raise TypeError('The key "g" of a Heyney Greenstein phase function dictionnary must be a float or an integer')
         self.set_phase_function(spf_dico['g'])
 
     def set_phase_function(self, g):
-        """Set the value of g."""
+        """
+        Set the value of g
+        """
         if g >= 1:
-            print('Warning the Henyey Greenstein parameter is greater than or '
-                  'equal to 1')
+            print('Warning the Henyey Greenstein parameter is greater than or equal to 1')
             print('The value was changed from {0:6.2f} to 0.99'.format(g))
             g = 0.99
         elif g <= -1:
-            print('Warning the Henyey Greenstein parameter is smaller than or '
-                  'equal to -1')
+            print('Warning the Henyey Greenstein parameter is smaller than or equal to -1')
             print('The value was changed from {0:6.2f} to -0.99'.format(g))
             g = -0.99
         self.g = float(g)
 
-    def compute_phase_function_from_cosphi(self, cos_phi):
+    def compute_phase_function(self, phi):
         """
-        Compute the phase function at (a) specific scattering angle(s) phi.
-
-        The argument is not phi but cos(phi) for optimization
-        reasons.
+        Compute the phase function at (a) specific scattering scattering angle(s) phi. phi must be in degrres. 
 
         Parameters
         ----------
-        cos_phi : float or array
-            cosine of the scattering angle(s) at which the scattering function
-            must be calculated.
+        phi : float or array
+            scattering angle(s) at which the scattering function must be calculated.
         """
-        return 1./(4*np.pi)*(1-self.g**2) / \
-            (1+self.g**2-2*self.g*cos_phi)**(3./2.)
+        return 1./(4*np.pi)*(1-self.g**2) / (1+self.g**2-2*self.g*np.cos(np.deg2rad(phi)))**(3./2.)
+
 
     def print_info(self):
-        """Print the value of the HG coefficient."""
+        """
+        Prints the value of the HG coefficient
+        """
         print('Heynyey Greenstein coefficient: {0:.2f}'.format(self.g))
 
 
-class DoubleHenyeyGreenstein_SPF(object):
-    """Implementation of a scattering phase function with a double Henyey\
-    Greenstein function."""
+# class DoubleHenyeyGreenstein_SPF(object):
+#     """
+#     Implementation of a scattering phase function with a double Henyey
+#     Greenstein function.
+#     """
 
-    def __init__(self, spf_dico={'g': [0.5, -0.3], 'weight': 0.7}):
-        """Construct a double Heyney Greenstein phase function."""
-        # it must contain the key "g"
-        if 'g' not in spf_dico.keys():
-            raise TypeError('The dictionnary describing a Heyney Greenstein'
-                            ' phase function must contain the key "g"')
-        # the value of "g" must be a list of floats
-        elif not isinstance(spf_dico['g'], (list, tuple, np.ndarray)):
-            raise TypeError('The key "g" of a Heyney Greenstein phase '
-                            'function dictionnary must be  a list of floats')
+#     def __init__(self, spf_dico={'g': [0.5, -0.3], 'weight': 0.7}):
+#         """
+#         """
+#         # it must contain the key "g"
+#         if 'g' not in spf_dico.keys():
+#             raise TypeError('The dictionnary describing a Heyney Greenstein'
+#                             ' phase function must contain the key "g"')
+#         # the value of "g" must be a list of floats
+#         elif not isinstance(spf_dico['g'], (list, tuple, np.ndarray)):
+#             raise TypeError('The key "g" of a Heyney Greenstein phase '
+#                             'function dictionnary must be  a list of floats')
+#         # it must contain the key "weight"
+#         if 'weight' not in spf_dico.keys():
+#             raise TypeError('The dictionnary describing a multiple Henyey '
+#                             'Greenstein phase function must contain the '
+#                             'key "weight"')
+#         # the value of "weight" must be a list of floats
+#         elif not isinstance(spf_dico['weight'], (float, int)):
+#             raise TypeError('The key "weight" of a Heyney Greenstein phase '
+#                             'function dictionnary must be a float (weight of '
+#                             'the first HG coefficient between 0 and 1)')
+#         elif spf_dico['weight'] < 0 or spf_dico['weight'] > 1:
+#             raise ValueError('The key "weight" of a Heyney Greenstein phase'
+#                              ' function dictionnary must be between 0 and 1. It'
+#                              ' corresponds to the weight of the first HG '
+#                              'coefficient')
+#         if len(spf_dico['g']) != 2:
+#             raise TypeError('The keys "weight" and "g" must contain the same'
+#                             ' number of elements')
+#         self.g = spf_dico['g']
+#         self.weight = spf_dico['weight']
+
+#     def print_info(self):
+#         """
+#         Prints the value of the HG coefficients and weights
+#         """
+#         print('Heynyey Greenstein first component : coeff {0:.2f} , '
+#               'weight {1:.1f}%'.format(self.g[0], self.weight*100))
+#         print('Heynyey Greenstein second component: coeff {0:.2f} , '
+#               'weight {1:.1f}%'.format(self.g[1], (1-self.weight)*100.))
+
+#     def compute_singleHG_from_cosphi(self, g, cos_phi):
+#         """
+#         Compute a single Heyney Greenstein phase function at (a) specific
+#         scattering scattering angle(s) phi. The argument is not phi but cos(phi)
+#         for optimization reasons.
+
+#         Parameters
+#         ----------
+#         g : float
+#             Heyney Greenstein coefficient
+#         cos_phi : float or array
+#             cosine of the scattering angle(s) at which the scattering function
+#             must be calculated.
+#         """
+#         return 1./(4*np.pi)*(1-g**2)/(1+g**2-2*g*cos_phi)**(3./2.)
+
+#     def compute_phase_function_from_cosphi(self, cos_phi):
+#         """
+#         Compute the phase function at (a) specific scattering scattering
+#         angle(s) phi. The argument is not phi but cos(phi) for optimization
+#         reasons.
+
+#         Parameters
+#         ----------
+#         cos_phi : float or array
+#             cosine of the scattering angle(s) at which the scattering function
+#             must be calculated.
+#         """
+#         return self.weight * self.compute_singleHG_from_cosphi(self.g[0],
+#                                                                cos_phi) + \
+#             (1-self.weight) * self.compute_singleHG_from_cosphi(self.g[1],
+#                                                                 cos_phi)
+
+
+class DoubleHenyeyGreenstein_SPF(object):
+    """
+    Implementation of a scattering phase function with a double Henyey Greenstein function.
+    """
+
+    def __init__(self, spf_dico={"g1": 0.8, "g2": -0.2, "weight": 0.2, "log_scaling": np.log10(1.3e+07)}):
+        """
+        """
+        if "g1"  not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a Heyney Greenstein phase function must contain the key 'g1'")
+        if "g2" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a Heyney Greenstein phase function must contain the key 'g2'")
+
+        if spf_dico["g1"] < -1 or spf_dico["g2"] < -1 or spf_dico["g1"] > 1 or spf_dico["g2"] > 1: 
+            raise ValueError("The key 'g1' and 'g2' of a Heyney Greenstein phase function dictionnary must be between -1 and 1.")
+            
         # it must contain the key "weight"
-        if 'weight' not in spf_dico.keys():
-            raise TypeError('The dictionnary describing a multiple Henyey '
-                            'Greenstein phase function must contain the '
-                            'key "weight"')
+        if "weight" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a multiple Henyey Greenstein phase function must contain the key 'weight'")
         # the value of "weight" must be a list of floats
-        elif not isinstance(spf_dico['weight'], (float, int)):
-            raise TypeError('The key "weight" of a Heyney Greenstein phase '
-                            'function dictionnary must be a float (weight of '
-                            'the first HG coefficient between 0 and 1)')
+        elif not isinstance(spf_dico["weight"], (float, int)):
+            raise TypeError("The key 'weight' of a Heyney Greenstein phase function dictionnary must be a float (weight of the first HG coefficient between 0 and 1)")
         elif spf_dico['weight'] < 0 or spf_dico['weight'] > 1:
-            raise ValueError('The key "weight" of a Heyney Greenstein phase'
-                             ' function dictionnary must be between 0 and 1. It'
-                             ' corresponds to the weight of the first HG '
-                             'coefficient')
-        if len(spf_dico['g']) != 2:
-            raise TypeError('The keys "weight" and "g" must contain the same'
-                            ' number of elements')
-        self.g = spf_dico['g']
-        self.weight = spf_dico['weight']
+            raise ValueError("The key 'weight' of a Heyney Greenstein phase function dictionnary must be between 0 and 1. It corresponds to the weight of the first HG coefficient")
+        
+        # it must contain the key "log_scaling"
+        if "log_scaling" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a multiple Henyey Greenstein phase function must contain the key 'log_scaling'")
+        # the value of "weight" must be a list of floats
+        # elif not isinstance(spf_dico["scaling"], (float, int)):
+        #     raise TypeError("The key 'scaling' of a Heyney Greenstein phase function dictionnary must be a float")
+
+        
+        # if len(spf_dico['g']) != 2:
+        #     raise TypeError("The keys 'weight' and 'g' must contain the same number of elements")
+            
+        self.g1 = spf_dico["g1"]
+        self.g2 = spf_dico["g2"]
+        self.weight = spf_dico["weight"]
+        self.log_scaling = spf_dico["log_scaling"]
+
 
     def print_info(self):
-        """Print the value of the HG coefficients and weights."""
-        print('Heynyey Greenstein first component : coeff {0:.2f} , '
-              'weight {1:.1f}%'.format(self.g[0], self.weight*100))
-        print('Heynyey Greenstein second component: coeff {0:.2f} , '
-              'weight {1:.1f}%'.format(self.g[1], (1-self.weight)*100.))
-
-    def compute_singleHG_from_cosphi(self, g, cos_phi):
         """
-        Compute a single Heyney Greenstein phase function at (a) specific\
-        scattering angle(s) phi.
+        Prints the value of the HG coefficients and weights
+        """
+        print(f"Henyey-Greenstein first component g1 = {self.g1:.2f} and w = {self.weight:.2f}")
+        print(f"Henyey-Greenstein second component g2 = {self.g2:.2f} and 1-w={1.0 - self.weight:.2f}")
+        print(f"Henyey-Greenstein log_scaling {self.log_scaling=:.2f}")
 
-        The argument is not phi but cos(phi) for optimization reasons.
+    def compute_singleHG(self, g, phi):
+        """
+        Compute a single Heyney Greenstein phase function at (a) specific scattering scattering angle(s) phi. 
 
         Parameters
         ----------
         g : float
             Heyney Greenstein coefficient
-        cos_phi : float or array
-            cosine of the scattering angle(s) at which the scattering function
-            must be calculated.
+        phi : float or array
+            scattering angle(s) at which the scattering function must be calculated.
         """
-        return 1./(4*np.pi)*(1-g**2)/(1+g**2-2*g*cos_phi)**(3./2.)
+        return 1./(4*np.pi)*(1-g**2)/(1+g**2-2*g*np.cos(np.deg2rad(phi)))**(3./2.)
 
-    def compute_phase_function_from_cosphi(self, cos_phi):
+    def compute_phase_function(self, phi):
         """
-        Compute the phase function at (a) specific scattering angle(s) phi.
-
-        The argument is not phi but cos(phi) for optimization reasons.
+        Compute the phase function at (a) specific scattering scattering angle(s) phi.
 
         Parameters
         ----------
-        cos_phi : float or array
-            cosine of the scattering angle(s) at which the scattering function
-            must be calculated.
+        phi : float or array
+            scattering angle(s) at which the scattering function must be calculated.
         """
-        return self.weight * self.compute_singleHG_from_cosphi(self.g[0],
-                                                               cos_phi) + \
-            (1-self.weight) * self.compute_singleHG_from_cosphi(self.g[1],
-                                                                cos_phi)
+        scaling = 10**(self.log_scaling)
+        return scaling*( (self.weight * self.compute_singleHG(self.g1, phi) + (1-self.weight) * self.compute_singleHG(self.g2, phi)) /
+                              (self.weight * self.compute_singleHG(self.g1, 90.0) + (1-self.weight) * self.compute_singleHG(self.g2, 90.0)) )
+
+
 
 
 class Interpolated_SPF(object):
-    """Custom implementation of a scattering phase function by providing a list\
-        of scattering phase angles and corresponding values of the phase \
-        function."""
+    """
+    Custom implementation of a scattering phase function by providing a list of
+    scattering phase angles and corresponding values of the phase function.
+    """
 
-    def __init__(self, spf_dico={'phi': np.array([0, 18, 36, 54, 72, 90,
-                                                  108, 126, 144, 162]),
-                                 'spf': np.array([3.580, 0.703, 0.141, 0.0489,
-                                                 0.0233, 0.0136, 0.0091, 0.0069,
-                                                 0.0056, 0.005])}):
+    def __init__(self, spf_dico={'phi': np.array([0, 18, 36, 54, 72, 90, 108, 126, 144, 162]),
+                                 'spf': np.array([3.580, 0.703, 0.141, 0.0489, 0.0233, 0.0136, 0.0091, 0.0069, 0.0056, 0.005])}):
         """
-        Construct the Interpolated_SPF class.
-
-        It checks whether the spf_dico contains the keys 'phi' and 'spf'
+        Constructor of the Interpolated_SPF class. It checks whether the spf_dico
+        contains the keys 'phi' and 'spf'
 
         Parameters
         ----------
         spf_dico :  dict
-            dictionnary containing at least the keys "phi" (list of scattering
-            angles) and "spf" (list of corresponding scattering phase function
-            values). Optionally it can specify the kind of interpolation
-            requested (as specified by the scipy.interpolate.interp1d function),
-            by default it uses a quadratic interpolation.
+            dictionnary containing at least the keys "phi" (list of scattering angles)
+            and "spf" (list of corresponding scattering phase function values)
+            Optionnaly it can specify the kind of interpolation requested (as
+            specified by the scipy.interpolate.interp1d function), by default
+            it uses a quadratic interpolation.
         """
         for key in ['phi', 'spf']:
             if key not in spf_dico.keys():
@@ -1066,128 +1409,280 @@ class Interpolated_SPF(object):
                                 ' function dictionnary must be a list, np array'
                                 ' or tuple'.format(key))
         if len(spf_dico['phi']) != len(spf_dico['spf']):
-            raise TypeError('The keys "phi" and "spf" must contain the same'
-                            ' number of elements')
+            raise TypeError('The keys "phi" and "spf" must contain the same number of elements')
         self.interpolate_phase_function(spf_dico)
 
     def print_info(self):
-        """Print the information of the spf."""
+        """
+        Prints the information of the spf
+        """
         phi = np.linspace(0, 180, 19)
-        spf = self.compute_phase_function_from_cosphi(np.cos(np.deg2rad(phi)))
+        spf = self.compute_phase_function(phi)
         print('Scattering angle: ', phi)
         print('Interpolated scattering phase function: ', spf)
 
     def interpolate_phase_function(self, spf_dico):
-        """Create the function that returns the scattering phase function based\
-        on the scattering angle by interpolating the values given in the\
-        dictionnary.
-
-        By default it uses a quadractic interpolation.
+        """
+        Creates the function that returns the scattering phase function based
+        on the scattering angle by interpolating the values given in the
+        dictionnary. By default it uses a quadractic interpolation.
 
         Parameters
         ----------
         spf_dico :  dict
-            dictionnary containing at least the keys "phi" (list of scattering
-            angles) and "spf" (list of corresponding scattering phase function
-            values). Optionally it can specify the kind of interpolation
-            requested (as specified by the scipy.interpolate.interp1d function),
-            by default it uses a quadratic interpolation.
-            best_spf_interp_pchip = PchipInterpolator(scat_angles,best_spf)(phi)
+            dictionnary containing at least the keys "phi" (list of scattering angles)
+            and "spf" (list of corresponding scattering phase function values)
+            Optionnaly it can specify the kind of interpolation requested (as
+            specified by the scipy.interpolate.interp1d function), by default
+            it uses a quadratic interpolation.
+            best_spf_interp_pchip = PchipInterpolator(scat_angles,best_spf)(phi)    
 
         """
         if 'kind' in spf_dico.keys():
-            if not isinstance(spf_dico['kind'], int) and \
-                spf_dico['kind'] not in ['linear', 'nearest', 'zero', 'slinear',
-                                         'quadratic', 'cubic', 'previous',
-                                         'next']:
+            if not isinstance(spf_dico['kind'], int) and spf_dico['kind'] not in \
+                ['linear', 'nearest', 'zero', 'slinear',
+                 'quadratic', 'cubic', 'previous', 'next']:
                 raise TypeError('The key "{0:s}" must be an integer '
-                                'or a string ("linear", "nearest", "zero", '
-                                '"slinear", "quadratic", "cubic", "previous",'
+                                'or a string ("linear", "nearest", "zero", "slinear", '
+                                '"quadratic", "cubic", "previous",'
                                 '"next" or "pchip")'.format(spf_dico['kind']))
             else:
                 kind = spf_dico['kind']
         else:
             kind = 'pchip'
             # by default, we use pchip for interpolation
-            interp_func = PchipInterpolator(spf_dico['phi'], spf_dico['spf'])
+            interp_func = PchipInterpolator(spf_dico['phi'],spf_dico['spf'])
         if kind != 'pchip':
-            interp_func = interp1d(spf_dico['phi'], spf_dico['spf'], kind=kind,
-                                   bounds_error=False, fill_value=np.nan)
+            interp_func = interp1d(spf_dico['phi'],spf_dico['spf'], kind=kind,
+                                                   bounds_error=False,
+                                                   fill_value=np.nan)
 
         self.interpolation_function = interp_func
 
-    def compute_phase_function_from_cosphi(self, cos_phi):
-        """Compute the phase function at (a) specific scattering angle(s) phi.
-
-        The argument is not phi but cos(phi) for optimization
+    def compute_phase_function(self, phi):
+        """
+        Compute the phase function at (a) specific scattering scattering
+        angle(s) phi. The argument is not phi but cos(phi) for optimization
         reasons.
 
         Parameters
         ----------
-        cos_phi : float or array
-            cosine of the scattering angle(s) at which the scattering function
-            must be calculated.
+        phi : float or array of the scattering angle(s) at which the scattering function must be calculated.
         """
-        return self.interpolation_function(np.rad2deg(np.arccos(cos_phi)))
+        return self.interpolation_function(phi)
         # return self.interpolation_function(cos_phi)
 
 
-if __name__ == '__main__':
+    
+    
+
+
+
+class BetaFunc_DOLP(object):
     """
-    It is an example of use of the ScatteredLightDisk class.
+    Implementation of the degree of linear polarisation with a beta function (cf Bin Ren et al 23)
     """
 
-    # Example 1: creation of a disk at 20pc, with semi-major axis 20 a.u.
-    #            inner and outer slopes 2 and -5, inclined by 70degrees wrt
-    #            the line of sight and with a PA of 45degrees, an isotropic
-    #            phase function
-    Scatt_light_disk1 = ScatteredLightDisk(nx=201, ny=201, distance=20,
-                                           itilt=70., omega=0.,
-                                           pxInArcsec=0.01225, pa=45.,
-                                           density_dico={'name': '2PowerLaws',
-                                                         'ain': 5, 'aout': -5,
-                                                         'a': 40, 'e': 0,
-                                                         'ksi0': 1.,
-                                                         'gamma': 2.,
-                                                         'beta': 1.},
-                                           spf_dico={'name': 'HG', 'g': 0.,
-                                                     'polar': False})
-    disk1 = Scatt_light_disk1.compute_scattered_light()
+    def __init__(self, spf_dico={"alpha": 2.5, "beta": 4.5, "fmax": 0.5}):
+        """
+        """
+        ### key "alpha"
+        if "alpha" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a beta function dolp  must contain the key 'alpha'")
+        # the value of "alpha" must be a float
+        elif not isinstance(spf_dico["alpha"], (float, int)):
+            raise TypeError("The key 'alpha' of a beta function dolp dictionnary must be a float")
+        elif spf_dico["alpha"] < 1:
+            raise ValueError("The key 'alpha' of a beta function dictionnary must be between 1 and inf.")
+        
+        ### key "beta"
+        if "beta" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a beta function dolp  must contain the key 'beta'")
+        # the value of "weight" must be a list of floats
+        elif not isinstance(spf_dico["beta"], (float, int)):
+            raise TypeError("The key 'beta' of a beta function dolp dictionnary must be a float")
+        elif spf_dico["beta"] < 1:
+            raise ValueError("The key 'beta' of a beta function dictionnary must be between 1 and inf.")
+        
+        ### key "fmax"
+        if "fmax" not in spf_dico.keys():
+            raise TypeError("The dictionnary describing a beta function dolp  must contain the key 'fmax'")
+        elif not isinstance(spf_dico["fmax"], (float, int)):
+            raise TypeError("The key 'fmax' of a beta function dolp dictionnary must be a float")
+        elif spf_dico["fmax"] < 0 or spf_dico["fmax"] > 1:
+            raise ValueError("The key 'fmax' of a beta function dictionnary must be between 0 and 1")
 
-    # If you prefer set the parameters in differen steps, you can also do that
-    # with: (this is identical)
-    Scatt_light_disk1 = ScatteredLightDisk(nx=201, ny=201, distance=20)
-    Scatt_light_disk1.set_pa(45)
-    Scatt_light_disk1.set_inclination(70)
-    Scatt_light_disk1.set_density_distribution({'name': '2PowerLaws',
-                                                'ain': 2, 'aout': -5, 'a': 20,
-                                                'e': 0, 'ksi0': 1.,
-                                                'gamma': 2., 'beta': 1.})
-    Scatt_light_disk1.set_phase_function(
-        {'name': 'HG', 'g': 0., 'polar': False})
-    disk1 = Scatt_light_disk1.compute_scattered_light()
+        
+        self.alpha = spf_dico["alpha"]
+        self.beta  = spf_dico["beta"]
+        self.fmax  = spf_dico['fmax']
 
-    # If you want to know what are the parameters you set for your disk:
-    Scatt_light_disk1.print_info()
+    def print_info(self):
+        """
+        Prints the value of the HG coefficients and weights
+        """
+        print(f"beta function first component alpha = {self.alpha:.2f}")
+        print(f"beta function second component beta = {self.beta:.2f}")
+        print(f"beta function third component fmax = {self.fmax:.2f}")
 
-    # Example 2: Creation of a disk similar to example 1 but with a double
-    #           Heyney Greenstein phase function
 
-    Scatt_light_disk2 = ScatteredLightDisk(nx=201, ny=201, distance=20)
-    Scatt_light_disk2.set_pa(45)
-    Scatt_light_disk2.set_inclination(70)
-    Scatt_light_disk2.set_density_distribution({'name': '2PowerLaws',
-                                                'ain': 2, 'aout': -5, 'a': 20,
-                                                'e': 0, 'ksi0': 1.,
-                                                'gamma': 2., 'beta': 1.})
-    Scatt_light_disk2.set_phase_function({'name': 'DoubleHG',
-                                          'g': [0.6, -0.6], 'weight': 0.7,
-                                          'polar': False})
-    Scatt_light_disk2.print_info()
-    disk2 = Scatt_light_disk2.compute_scattered_light()
+    def compute_B_dolp (self, x):
+       """
+        Compute probability density function of a beta distribution (cf Ren+23) at (a) specific
+        value(s) x. 
+        
+        Parameters
+        ----------
+        alpha, beta : floats
+            B_dolp coefficients
+        x : float or array
+            value at which the probability density function of the beta distribution is calculated.
+        """
+       return scsp.gamma((self.alpha+self.beta))/(scsp.gamma(self.alpha)*scsp.gamma(self.beta)) * (x)**(self.alpha-1)*(1-x)**(self.beta-1)
+       #return scsp.gamma((alpha+beta))/(scsp.gamma(alpha)*scsp.gamma(beta)) * (x)**(alpha-1)*(1-x)**(beta-1)
+        
+    def compute_beta_dolp(self, phi):
+        """
+        Compute the dolp parametrize using the beta function at (a) specific scattering scattering angle(s) phi. 
 
-    # Let's turn the polarisation on now:
-    Scatt_light_disk2.set_phase_function({'name': 'DoubleHG',
-                                          'g': [0.6, -0.6], 'weight': 0.7,
-                                          'polar': True})
-    disk2_polar = Scatt_light_disk2.compute_scattered_light()
+        Parameters
+        ----------
+        phi : float or array, in degrees
+            scattering angle(s) at which the scattering function must be calculated.
+        """
+        
+        
+        # return self.fmax * self.compute_B_dolp(phi/180, self.alpha, self.beta) /\
+        #         self.compute_B_dolp( ((self.alpha-1)/(self.alpha+self.beta-2)), self.alpha, self.beta)
+    
+        return self.fmax * self.compute_B_dolp(phi/180) / self.compute_B_dolp( ((self.alpha-1)/(self.alpha+self.beta-2)))
+
+
+
+#%%
+
+#### Test
+
+
+# if __name__ == '__main__':
+#     """
+#     It is an example of use of the ScatteredLightDisk class.
+#     """
+
+#     # Example 1: creation of a disk at 20pc, with semi-major axis 20 a.u.
+#     #            inner and outer slopes 2 and -5, inclined by 70degrees wrt
+#     #            the line of sight and with a PA of 45degrees, an isotropic
+#     #            phase function
+#     Scattered_light_disk1 = ScatteredLightDisk(nx=201, ny=201, distance=20, itilt=70., omega=0., pxInArcsec=0.01225, pa=45.,
+#                                                 density_dico={'name': '2PowerLaws', 'ain': 5, 'aout': -5, 'a': 40, 'e': 0, 'ksi0': 1., 'gamma': 2., 'beta': 1.},
+#                                                 spf_dico={'tot': True, 'polar': False, 'spf_method': 'HG', 'g': 0.})
+#     disk1 = Scattered_light_disk1.compute_scattered_light()
+
+#     # If you prefer set the parameters in differen steps, you can also do that
+#     # with: (this is identical)
+#     Scattered_light_disk1 = ScatteredLightDisk(nx=201, ny=201, distance=20)
+#     Scattered_light_disk1.set_pa(45)
+#     Scattered_light_disk1.set_inclination(70)
+#     Scattered_light_disk1.set_density_distribution({'name': '2PowerLaws', 'ain': 2, 'aout': -5, 'a': 20, 'e': 0, 'ksi0': 1., 'gamma': 2., 'beta': 1.})
+#     Scattered_light_disk1.set_phase_function({'tot': True, 'polar': False, 'spf_method': 'HG', 'g': 0.})
+#     disk1 = Scattered_light_disk1.compute_scattered_light()
+
+#     # If you want to know what are the parameters you set for your disk:
+#     Scattered_light_disk1.print_info()
+
+#     # Example 2: Creation of a disk similar to example 1 but with a double
+#     #           Heyney Greenstein phase function
+
+#     Scattered_light_disk2 = ScatteredLightDisk(nx=201, ny=201, distance=20)
+#     Scattered_light_disk2.set_pa(45)
+#     Scattered_light_disk2.set_inclination(70)
+#     Scattered_light_disk2.set_density_distribution({'name': '2PowerLaws', 'ain': 2, 'aout': -5, 'a': 20, 'e': 0, 'ksi0': 1., 'gamma': 2., 'beta': 1.})
+#     Scattered_light_disk2.set_phase_function({'tot': True, 'spf_method':'DoubleHG', 'g1': 0.6,'g2': -0.6, 'weight': 0.7,'scaling':1.0e+07, 'polar': False })
+#     Scattered_light_disk2.print_info()
+#     disk2 = Scattered_light_disk2.compute_scattered_light()
+
+#     # Let's turn the polarisation on now:
+#     # Scattered_light_disk2.set_phase_function({'tot': False, 'spf_method':'DoubleHG', 'g': [0.6, -0.6], 'weight': 0.7,'scaling':1.0e+07, 
+#     #                                           'polar': True, 'pspf_method':'DOLP','alpha': 2.5, 'beta': 4.5, 'fmax': 0.5})
+#     # Scattered_light_disk2.print_info()
+#     # disk2_polar = Scattered_light_disk2.compute_scattered_light()
+    
+#%% scattlightdisk3
+"""
+    Scattered_light_disk3 = ScatteredLightDisk(nx=201, ny=201, distance=70.8)
+    Scattered_light_disk3.set_pa(26.76)
+    Scattered_light_disk3.set_inclination(76.74)
+    Scattered_light_disk3.set_omega(-109.70)
+    Scattered_light_disk3.set_density_distribution({'name': '2PowerLaws', 'ain': 30, 'aout': -16.25, 'a': 75.19, 'e': 0.057 , 'ksi0': 1., 'gamma': 2., 'beta': 1.})
+    # Scattered_light_disk3.set_phase_function({'tot': True, 'spf_method':'DoubleHG', 'g': [0.832, -0.137], 'weight': 0.19,'scaling':1.31e+07, 
+    #                                           'polar': True, 'pspf_method':'DOLP','alpha': 2.30, 'beta': 4.48, 'fmax': 0.49 })
+    Scattered_light_disk3.set_phase_function({'tot': True, 'spf_method':'DoubleHG', 'g1': 0.825662, 'g2': -0.225391, 'weight': 0.220596,'log_scaling':np.log10(1.34551e+07), 
+                                              'polar': True, 'pspf_method':'DOLP','alpha': 2.32096, 'beta': 4.51366, 'fmax': 0.487016 })
+    Scattered_light_disk3.print_info()
+    disk3_tot = Scattered_light_disk3.compute_scattered_light()[0,:]
+    disk3_polar = Scattered_light_disk3.compute_scattered_light()[1,:]
+    
+    fig, (ax1,ax2) = plt.subplots(1, 2)
+    
+    ax1.set_aspect('equal', adjustable='box')
+    im1 =ax1.pcolormesh(disk3_tot, cmap='inferno')  # , robust = True)
+    fig.colorbar(im1, ax=ax1,fraction=0.046, pad=0.04)
+    #ax1.set_xlim(0,200)
+    ax1.set_ylim(0,200)
+
+    ax2.set_aspect('equal', adjustable='box')
+    im2 = ax2.pcolormesh(disk3_polar, cmap='inferno')  # , robust = True)
+    fig.colorbar(im2, ax=ax2,fraction=0.046, pad=0.04)
+    #ax2.set_xlim(0,200)
+    ax2.set_ylim(0,200)
+    
+    # A= Scattered_light_disk3.get_scattering_angle()
+    # fits.writeto("~/Desktop/A.fits",A,overwrite=True)
+    
+    Scattered_light_disk3.phase_function.plot_phase_function(None) #Path("/Users/bonduelm/Desktop/")
+    
+"""
+
+
+#%%
+# phi_test = np.arange(0,181,0.1)
+# def shg_spf(phi, g):
+#     res_shg_spf = 1./(4*np.pi)*(1-g**2)/(1+g**2-2*g*np.cos(np.deg2rad(phi)))**(3./2.)   
+#     return (res_shg_spf)
+
+# def dhg_spf(phi, g1, g2, w, scaling):
+#     res_dhg_spf = scaling *(w*shg_spf(phi,g1) + (1-w)*shg_spf(phi,g2))     
+#     return (res_dhg_spf)
+
+# Test = (1-np.cos(np.deg2rad(phi_test))**2) / (1+np.cos(np.deg2rad(phi_test))**2) * dhg_spf(phi_test,0.832, -0.137,0.19,1.31e+07)/dhg_spf(0,0.832, -0.137,0.19,1.31e+07)
+# fig, (ax1) = plt.subplots(1, 1)
+# ax1.plot(phi_test,Test, marker = '+',color = "red")  
+
+
+# cosphi_test = np.cos(phi_test)
+# acoscosphi_test = ((np.arccos(cosphi_test)))
+# #cosphi2_test = np.cos(phi_test)
+
+# fig, (ax1) = plt.subplots(1, 1)
+# ax1.plot(phi_test,phi_test, marker = '+',color = "red")  # , robust = True)
+# ax1.plot(phi_test,cosphi_test, color = "blue")  # , robust = True)
+# ax1.plot(phi_test,acoscosphi_test, color = "orange")  # , robust = True)
+# ax1.set_xlim(0,2*np.pi)
+# ax1.set_ylim(-np.pi,np.pi)
+# ax1.grid()
+
+# #phi_test = np.arange(0,181,0.1)
+# cosphi_OG = ((np.cos(np.arange(0,181,0.1))))
+# phi_test2 = ((np.arccos(cosphi_OG)))
+# cosphi2_test = np.cos(phi_test2)
+# #phi2_test =
+
+# fig, (ax1) = plt.subplots(1, 1)
+# ax1.plot(phi_test,phi_test, marker = '+',color = "red")  # , robust = True)
+# ax1.plot(phi_test,cosphi_test, color = "blue")  # , robust = True)
+# ax1.plot(phi_test,cosphi2_test, color = "orange")  # , robust = True)
+# ax1.set_xlim(0,2*np.pi)
+# ax1.set_ylim(-np.pi,np.pi)
+# ax1.grid()
+
+
